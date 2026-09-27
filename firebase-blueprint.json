@@ -1,0 +1,109 @@
+{
+  "entities": {
+    "product": {
+      "title": "Product",
+      "description": "Atelier garment item catalog",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "price": { "type": "number" },
+        "originalPrice": { "type": "number" },
+        "description": { "type": "string" },
+        "fabricDetails": { "type": "string" },
+        "inStock": { "type": "boolean" },
+        "stockCount": { "type": "number" },
+        "isFeatured": { "type": "boolean" },
+        "images": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["title", "category", "price", "description"]
+    },
+    "category": {
+      "title": "Category",
+      "description": "Product collection category",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "slug": { "type": "string" },
+        "description": { "type": "string" },
+        "bannerImage": { "type": "string" }
+      },
+      "required": ["name", "slug"]
+    },
+    "order": {
+      "title": "Order",
+      "description": "Customer bespoke or ready-to-wear order with bKash verification pipeline",
+      "type": "object",
+      "properties": {
+        "orderNumber": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerEmail": { "type": "string" },
+        "customerPhone": { "type": "string" },
+        "deliveryAddress": { "type": "string" },
+        "city": { "type": "string" },
+        "subtotal": { "type": "number" },
+        "deliveryFee": { "type": "number" },
+        "total": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "paymentStatus": { "type": "string" },
+        "bKashTrxId": { "type": "string" },
+        "bKashSenderNumber": { "type": "string" },
+        "orderStatus": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "estimatedDelivery": { "type": "string" }
+      },
+      "required": ["orderNumber", "customerName", "customerPhone", "deliveryAddress", "total"]
+    },
+    "user": {
+      "title": "User",
+      "description": "Registered customer or RBAC admin profile",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["super_admin", "admin", "staff", "customer"] },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["email", "name", "role"]
+    },
+    "setting": {
+      "title": "Setting",
+      "description": "Store configuration and official bKash credentials",
+      "type": "object",
+      "properties": {
+        "storeName": { "type": "string" },
+        "showroomAddress": { "type": "string" },
+        "merchantBkashNumber": { "type": "string" },
+        "merchantBkashQrUrl": { "type": "string" },
+        "emergencyPhone": { "type": "string" },
+        "deliveryFeeInsideDhaka": { "type": "number" },
+        "deliveryFeeOutsideDhaka": { "type": "number" }
+      },
+      "required": ["storeName", "merchantBkashNumber"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": "product",
+      "description": "Atelier garments collection"
+    },
+    "/categories/{categoryId}": {
+      "schema": "category",
+      "description": "Fashion taxonomy categories"
+    },
+    "/orders/{orderId}": {
+      "schema": "order",
+      "description": "Orders and bKash transaction verification"
+    },
+    "/users/{userId}": {
+      "schema": "user",
+      "description": "User profiles and RBAC permissions"
+    },
+    "/settings/{settingId}": {
+      "schema": "setting",
+      "description": "Global store and payment configuration"
+    }
+  }
+}
