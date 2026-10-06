@@ -1,6 +1,6 @@
 {
   "name": "TEX-MART FASHION - Haute Menswear",
-  "description": "High-end luxury menswear eCommerce brand featuring dynamic festive theme engines, bKash advance & prepaid verification, and RBAC admin portal.",
+  "description": "High-end luxury menswear eCommerce brand featuring artisanal craftsmanship, bespoke Panjabis, Italian wool suits, and direct bKash payment verification.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

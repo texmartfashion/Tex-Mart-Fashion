@@ -6,8 +6,6 @@ import {
   ThemePresetId,
   SiteSettings,
   Order,
-  User,
-  UserRole,
   OrderItem,
   PaymentRecord
 } from '../types';
@@ -16,23 +14,17 @@ import {
   INITIAL_THEMES,
   INITIAL_PRODUCTS,
   INITIAL_ORDERS,
-  INITIAL_SETTINGS,
-  INITIAL_USERS
+  INITIAL_SETTINGS
 } from '../data/seedData';
+import { api } from '../lib/api';
 import {
   db,
-  auth,
-  googleProvider,
   collection,
   doc,
-  getDoc,
   setDoc,
   updateDoc,
   deleteDoc,
-  onSnapshot,
-  signInWithPopup,
-  firebaseSignOut,
-  onAuthStateChanged
+  onSnapshot
 } from '../lib/firebase';
 
 interface CartItem extends OrderItem {
@@ -98,18 +90,7 @@ interface StoreContextType {
   settings: SiteSettings;
   updateSettings: (updates: Partial<SiteSettings>) => void;
 
-  // Auth & RBAC
-  currentUser: User | null;
-  users: User[];
-  loginWithGoogle: () => void;
-  loginAdmin: (email: string, pass: string) => { success: boolean; error?: string };
-  logout: () => void;
-  updateUserRole: (userId: string, newRole: UserRole) => void;
-  hasPermission: (requiredRole: UserRole[]) => boolean;
-
-  // View Routing & UI
-  currentView: 'store' | 'admin' | 'order-lookup';
-  setCurrentView: (view: 'store' | 'admin' | 'order-lookup') => void;
+  // Selection
   selectedProductId: string | null;
   setSelectedProductId: (id: string | null) => void;
 }
@@ -122,8 +103,6 @@ const STORAGE_KEYS = {
   ORDERS: 'texmart_orders_v1',
   THEMES: 'texmart_themes_v1',
   SETTINGS: 'texmart_settings_v1',
-  USERS: 'texmart_users_v1',
-  CURRENT_USER: 'texmart_auth_user_v1',
   CART: 'texmart_cart_v1',
   WISHLIST: 'texmart_wishlist_v1'
 };
@@ -141,10 +120,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return saved ? JSON.parse(saved) : INITIAL_CATEGORIES;
   });
 
-  // Themes
+  // Themes - always ensure regular non-festival theme is active
   const [themes, setThemes] = useState<ThemeConfig[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.THEMES);
-    return saved ? JSON.parse(saved) : INITIAL_THEMES;
+    return INITIAL_THEMES.map(t => ({
+      ...t,
+      isActive: t.id === 'regular'
+    }));
   });
 
   // Settings
@@ -159,18 +140,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return saved ? JSON.parse(saved) : INITIAL_ORDERS;
   });
 
-  // Users
-  const [users, setUsers] = useState<User[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.USERS);
-    return saved ? JSON.parse(saved) : INITIAL_USERS;
-  });
-
-  // Current Auth User
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
-    return saved ? JSON.parse(saved) : null;
-  });
-
   // Cart
   const [cart, setCart] = useState<CartItem[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.CART);
@@ -183,75 +152,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return saved ? JSON.parse(saved) : [];
   });
 
-  const getInitialView = (): 'store' | 'admin' | 'order-lookup' => {
-    if (typeof window === 'undefined') return 'store';
-    try {
-      const search = window.location.search;
-      const params = new URLSearchParams(search);
-      if (params.get('view') === 'admin' || params.get('admin') === 'true') {
-        return 'admin';
-      }
-      if (window.location.pathname.startsWith('/admin')) {
-        return 'admin';
-      }
-      if (window.location.hash.toLowerCase().includes('admin')) {
-        return 'admin';
-      }
-      if (params.get('view') === 'order-lookup') {
-        return 'order-lookup';
-      }
-    } catch {
-      // fallback
-    }
-    return 'store';
-  };
-
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isWishlistOpen, setIsWishlistOpen] = useState(false);
-  const [currentView, setCurrentViewState] = useState<'store' | 'admin' | 'order-lookup'>(getInitialView);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
 
-  const setCurrentView = (view: 'store' | 'admin' | 'order-lookup') => {
-    setCurrentViewState(view);
-    if (typeof window !== 'undefined') {
-      try {
-        const url = new URL(window.location.href);
-        if (view === 'admin') {
-          url.searchParams.set('view', 'admin');
-          window.history.pushState({ view: 'admin' }, '', url.toString());
-        } else if (view === 'order-lookup') {
-          url.searchParams.set('view', 'order-lookup');
-          window.history.pushState({ view: 'order-lookup' }, '', url.toString());
-        } else {
-          url.searchParams.delete('view');
-          url.searchParams.delete('admin');
-          if (url.pathname.startsWith('/admin')) {
-            url.pathname = '/';
-          }
-          if (url.hash.toLowerCase().includes('admin')) {
-            url.hash = '';
-          }
-          window.history.pushState({ view: 'store' }, '', url.toString());
-        }
-      } catch (err) {
-        console.error('History pushState error', err);
-      }
-    }
-  };
-
-  useEffect(() => {
-    const handleLocationChange = () => {
-      setCurrentViewState(getInitialView());
-    };
-    window.addEventListener('popstate', handleLocationChange);
-    window.addEventListener('hashchange', handleLocationChange);
-    return () => {
-      window.removeEventListener('popstate', handleLocationChange);
-      window.removeEventListener('hashchange', handleLocationChange);
-    };
-  }, []);
-
-  // Sync to local storage
+  // Sync to LocalStorage
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
   }, [products]);
@@ -259,10 +164,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(categories));
   }, [categories]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(orders));
-  }, [orders]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.THEMES, JSON.stringify(themes));
@@ -273,16 +174,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [settings]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
-  }, [users]);
-
-  useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(currentUser));
-    } else {
-      localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
-    }
-  }, [currentUser]);
+    localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(orders));
+  }, [orders]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.CART, JSON.stringify(cart));
@@ -292,117 +185,76 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem(STORAGE_KEYS.WISHLIST, JSON.stringify(wishlist));
   }, [wishlist]);
 
-  // Real-time synchronization with Cloud Firestore
+  // Initial and background fetch from MongoDB API & Firestore
   useEffect(() => {
-    // 1. Sync Products from Firestore
-    const unsubscribeProducts = onSnapshot(
-      collection(db, 'products'),
-      (snapshot) => {
-        if (!snapshot.empty) {
-          const cloudProducts: Product[] = [];
-          snapshot.forEach((docSnap) => {
-            cloudProducts.push({ id: docSnap.id, ...docSnap.data() } as Product);
-          });
-          setProducts(cloudProducts);
-        } else {
-          // Seed initial products to Firestore
-          INITIAL_PRODUCTS.forEach((prod) => {
-            setDoc(doc(db, 'products', prod.id), prod).catch(() => {});
-          });
-        }
-      },
-      (error) => {
-        console.warn('Firestore products sync notice:', error);
+    // 1. Fetch from MongoDB backend API
+    api.getProducts().then((remoteProds) => {
+      if (remoteProds && remoteProds.length > 0) {
+        setProducts(remoteProds);
       }
-    );
+    }).catch(() => {});
 
-    // 2. Sync Categories from Firestore
-    const unsubscribeCategories = onSnapshot(
-      collection(db, 'categories'),
-      (snapshot) => {
-        if (!snapshot.empty) {
-          const cloudCategories: ProductCategory[] = [];
-          snapshot.forEach((docSnap) => {
-            cloudCategories.push({ id: docSnap.id, ...docSnap.data() } as ProductCategory);
-          });
-          setCategories(cloudCategories);
-        } else {
-          INITIAL_CATEGORIES.forEach((cat) => {
-            setDoc(doc(db, 'categories', cat.id), cat).catch(() => {});
-          });
-        }
-      },
-      (error) => {
-        console.warn('Firestore categories sync notice:', error);
+    api.getCategories().then((remoteCats) => {
+      if (remoteCats && remoteCats.length > 0) {
+        setCategories(remoteCats);
       }
-    );
+    }).catch(() => {});
 
-    // 3. Sync Orders from Firestore
-    const unsubscribeOrders = onSnapshot(
-      collection(db, 'orders'),
-      (snapshot) => {
-        if (!snapshot.empty) {
-          const cloudOrders: Order[] = [];
-          snapshot.forEach((docSnap) => {
-            cloudOrders.push({ id: docSnap.id, ...docSnap.data() } as Order);
-          });
-          cloudOrders.sort(
-            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          );
-          setOrders(cloudOrders);
-        } else {
-          INITIAL_ORDERS.forEach((ord) => {
-            setDoc(doc(db, 'orders', ord.id), ord).catch(() => {});
-          });
-        }
-      },
-      (error) => {
-        console.warn('Firestore orders sync notice:', error);
+    api.getOrders().then((remoteOrds) => {
+      if (remoteOrds && remoteOrds.length > 0) {
+        setOrders(remoteOrds);
       }
-    );
+    }).catch(() => {});
 
-    // 4. Sync Settings from Firestore
-    const unsubscribeSettings = onSnapshot(
-      doc(db, 'settings', 'global'),
-      (docSnap) => {
-        if (docSnap.exists()) {
-          setSettings(docSnap.data() as SiteSettings);
-        } else {
-          setDoc(doc(db, 'settings', 'global'), INITIAL_SETTINGS).catch(() => {});
-        }
-      },
-      (error) => {
-        console.warn('Firestore settings sync notice:', error);
+    api.getSettings().then((remoteSettings) => {
+      if (remoteSettings && remoteSettings.brandName) {
+        setSettings(remoteSettings);
       }
-    );
+    }).catch(() => {});
 
-    // 5. Auth State Changed Listener
-    const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
-      if (fbUser) {
-        const userDocRef = doc(db, 'users', fbUser.uid);
-        let role: UserRole = 'customer';
-        try {
-          const userDoc = await getDoc(userDocRef);
-        const emailLower = fbUser.email?.toLowerCase();
-        if (emailLower === 'texmartfashion01@gmail.com' || emailLower === 'texmartf@gmail.com') {
-          role = 'super_admin';
-        } else if (userDoc.exists()) {
-          role = userDoc.data().role || 'customer';
-        }
-        } catch {
-          // ignore
-        }
-
-        const appUser: User = {
-          id: fbUser.uid,
-          email: fbUser.email || 'customer@gmail.com',
-          name: fbUser.displayName || 'Distinguished Gentleman',
-          avatar: fbUser.photoURL || undefined,
-          role,
-          createdAt: new Date().toISOString()
-        };
-        setCurrentUser(appUser);
+    // 2. Real-time Firestore sync with local fallback
+    const unsubscribeProducts = onSnapshot(collection(db, 'products'), (snapshot) => {
+      if (!snapshot.empty) {
+        const remoteProducts: Product[] = [];
+        snapshot.forEach((docSnap) => {
+          remoteProducts.push({ id: docSnap.id, ...docSnap.data() } as Product);
+        });
+        setProducts(remoteProducts);
       }
+    }, (error) => {
+      console.warn('Firestore products snapshot listener fallback:', error.message);
+    });
+
+    const unsubscribeCategories = onSnapshot(collection(db, 'categories'), (snapshot) => {
+      if (!snapshot.empty) {
+        const remoteCats: ProductCategory[] = [];
+        snapshot.forEach((docSnap) => {
+          remoteCats.push({ id: docSnap.id, ...docSnap.data() } as ProductCategory);
+        });
+        setCategories(remoteCats);
+      }
+    }, (error) => {
+      console.warn('Firestore categories snapshot fallback:', error.message);
+    });
+
+    const unsubscribeOrders = onSnapshot(collection(db, 'orders'), (snapshot) => {
+      if (!snapshot.empty) {
+        const remoteOrders: Order[] = [];
+        snapshot.forEach((docSnap) => {
+          remoteOrders.push({ id: docSnap.id, ...docSnap.data() } as Order);
+        });
+        setOrders(remoteOrders);
+      }
+    }, (error) => {
+      console.warn('Firestore orders snapshot fallback:', error.message);
+    });
+
+    const unsubscribeSettings = onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
+      if (docSnap.exists()) {
+        setSettings(docSnap.data() as SiteSettings);
+      }
+    }, (error) => {
+      console.warn('Firestore settings snapshot fallback:', error.message);
     });
 
     return () => {
@@ -410,14 +262,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       unsubscribeCategories();
       unsubscribeOrders();
       unsubscribeSettings();
-      unsubscribeAuth();
     };
   }, []);
 
-  // Active Theme calculations
-  const activeTheme = themes.find(t => t.isActive) || themes[0];
+  // Active Theme calculations - regular theme default (not festival)
+  const activeTheme = themes.find(t => t.id === 'regular') || themes.find(t => t.isActive) || themes[0];
 
-  // Apply Theme CSS variables to :root dynamically!
+  // Apply Theme CSS variables to :root dynamically
   useEffect(() => {
     if (!activeTheme) return;
     const root = document.documentElement;
@@ -486,18 +337,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const updated = [...prev];
         updated[existingIndex].quantity += quantity;
         return updated;
-      } else {
-        const newItem: CartItem = {
-          id: `${product.id}_${size}_${Date.now()}`,
-          productId: product.id,
-          productTitle: product.title,
-          price: product.price,
-          size,
-          quantity,
-          image: product.images[0]
-        };
-        return [...prev, newItem];
       }
+      const newItem: CartItem = {
+        id: `cart_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        productId: product.id,
+        productTitle: product.title,
+        size: size,
+        price: product.price,
+        quantity,
+        image: product.images[0]
+      };
+      return [...prev, newItem];
     });
     setIsCartOpen(true);
   };
@@ -511,15 +361,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       removeFromCart(cartItemId);
       return;
     }
-    setCart(prev => prev.map(item => (item.id === cartItemId ? { ...item, quantity } : item)));
+    setCart(prev => prev.map(item => item.id === cartItemId ? { ...item, quantity } : item));
   };
 
-  const clearCart = () => setCart([]);
+  const clearCart = () => {
+    setCart([]);
+  };
 
-  const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
-  const cartSubtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const cartSubtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
-  // Wishlist methods
+  // Wishlist
   const toggleWishlist = (productId: string) => {
     setWishlist(prev =>
       prev.includes(productId) ? prev.filter(id => id !== productId) : [...prev, productId]
@@ -528,18 +380,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const isInWishlist = (productId: string) => wishlist.includes(productId);
 
-  const clearWishlist = () => setWishlist([]);
+  const clearWishlist = () => {
+    setWishlist([]);
+  };
 
   const wishlistCount = wishlist.length;
 
-  // Duplicate bKash Transaction ID check
+  // Duplicate Transaction ID prevention
   const isTrxIdUsed = (trxId: string): boolean => {
-    const clean = trxId.trim().toUpperCase();
-    if (!clean) return false;
-    return orders.some(o => o.payment && o.payment.trxId && o.payment.trxId.toUpperCase() === clean);
+    const cleanTrx = trxId.trim().toUpperCase();
+    if (!cleanTrx) return false;
+    return orders.some(o => o.payment && o.payment.trxId && o.payment.trxId.toUpperCase() === cleanTrx);
   };
 
-  // Order Placement with bKash workflow
+  // Create Order with bKash verification audit record
   const createOrder = (orderPayload: {
     customerName: string;
     customerPhone: string;
@@ -551,137 +405,132 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     paymentMethod: 'prepaid' | 'cod_advance';
     trxId: string;
     bkashSenderPhone: string;
-  }) => {
-    const cleanTrxId = orderPayload.trxId.trim().toUpperCase();
+  }): { success: boolean; order?: Order; error?: string } => {
+    const cleanTrx = orderPayload.trxId.trim().toUpperCase();
 
-    // Verification requirement: "No order proceeds without valid transaction ID"
-    if (!cleanTrxId || cleanTrxId.length < 6) {
-      return { success: false, error: 'A valid bKash Transaction ID (minimum 6 alphanumeric characters) is strictly required.' };
-    }
-
-    // Verification requirement: "Prevent duplicate transaction IDs"
-    if (isTrxIdUsed(cleanTrxId)) {
+    // Check duplicate TrxID fraud
+    if (isTrxIdUsed(cleanTrx)) {
       return {
         success: false,
-        error: `Transaction ID "${cleanTrxId}" has already been utilized for a previous order. Duplicate bKash submissions are prevented.`
+        error: `The bKash Transaction ID "${cleanTrx}" has already been submitted for an earlier order. Please verify your bKash SMS statement.`
       };
-    }
-
-    if (cart.length === 0) {
-      return { success: false, error: 'Your shopping bag is empty.' };
     }
 
     const deliveryCharge = orderPayload.deliveryZone === 'inside_dhaka'
       ? settings.deliveryChargeDhaka
       : settings.deliveryChargeOutside;
 
-    const subtotal = cartSubtotal;
-    const totalAmount = subtotal + deliveryCharge;
+    const totalAmount = cartSubtotal + deliveryCharge;
 
-    const isPrepaid = orderPayload.paymentMethod === 'prepaid';
-    const amountPaidAdvance = isPrepaid ? totalAmount : deliveryCharge;
-    const remainingBalance = isPrepaid ? 0 : subtotal;
+    const requiredAdvance = orderPayload.paymentMethod === 'prepaid'
+      ? totalAmount
+      : deliveryCharge;
 
     const orderId = `ord_${Date.now()}`;
-    const orderNumber = `TM-${Math.floor(10000 + Math.random() * 90000)}`;
 
-    const payment: PaymentRecord = {
+    const paymentRecord: PaymentRecord = {
       id: `pay_${Date.now()}`,
       orderId,
-      trxId: cleanTrxId,
       method: orderPayload.paymentMethod,
-      amount: amountPaidAdvance,
-      remainingBalance,
       status: 'pending',
+      amount: requiredAdvance,
+      trxId: cleanTrx,
       bkashSenderPhone: orderPayload.bkashSenderPhone.trim(),
-      submittedAt: new Date().toISOString()
+      submittedAt: new Date().toISOString(),
+      remainingBalance: totalAmount - requiredAdvance
     };
 
     const newOrder: Order = {
       id: orderId,
-      orderNumber,
-      userId: currentUser?.id,
+      orderNumber: `TM-${1000 + orders.length + 1}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      status: 'pending_verification',
       customerName: orderPayload.customerName,
-      customerPhone: orderPayload.customerPhone,
       customerEmail: orderPayload.customerEmail,
+      customerPhone: orderPayload.customerPhone,
       shippingAddress: {
         fullName: orderPayload.customerName,
         phone: orderPayload.customerPhone,
         email: orderPayload.customerEmail,
-        deliveryZone: orderPayload.deliveryZone,
         address: orderPayload.address,
         city: orderPayload.city,
+        deliveryZone: orderPayload.deliveryZone,
         notes: orderPayload.notes
       },
-      items: [...cart],
-      subtotal,
+      items: cart.map(c => ({
+        productId: c.productId,
+        productTitle: c.productTitle,
+        size: c.size,
+        price: c.price,
+        quantity: c.quantity,
+        image: c.image
+      })),
+      subtotal: cartSubtotal,
       deliveryCharge,
       totalAmount,
       paymentMethod: orderPayload.paymentMethod,
-      payment,
-      status: 'pending_verification',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      payment: paymentRecord
     };
 
     setOrders(prev => [newOrder, ...prev]);
     clearCart();
-    setDoc(doc(db, 'orders', newOrder.id), newOrder).catch((err) => {
-      console.warn('Firestore order creation notice:', err);
+
+    // Persist to MongoDB backend
+    api.createOrder(newOrder).catch((err) => {
+      console.warn('MongoDB createOrder notice:', err);
     });
+
+    // Also persist to Firestore
+    setDoc(doc(db, 'orders', newOrder.id), newOrder).catch((err) => {
+      console.warn('Firestore createOrder notice:', err);
+    });
+
     return { success: true, order: newOrder };
   };
 
-  // Payment Verification by Admin / Moderator
   const verifyPayment = (orderId: string, approved: boolean, note?: string) => {
-    const verifiedAt = new Date().toISOString();
-    const verifiedBy = currentUser?.email || 'admin@texmartfashion.com';
-    const notes = note || (approved ? 'bKash Transaction verified against statement' : 'Invalid or unconfirmed bKash TrxID');
-    const newStatus: Order['status'] = approved ? 'confirmed' : 'cancelled';
-    const paymentStatus = approved ? 'verified' : 'rejected';
+    const updatedStatus = approved ? 'confirmed' : 'pending_verification';
+    const updatedPaymentStatus = approved ? 'verified' : 'rejected';
 
     setOrders(prev =>
       prev.map(ord => {
         if (ord.id !== orderId) return ord;
-        const updatedPayment: PaymentRecord = {
-          ...ord.payment,
-          status: paymentStatus,
-          verifiedAt,
-          verifiedBy,
-          notes
-        };
         return {
           ...ord,
-          payment: updatedPayment,
-          status: newStatus,
-          updatedAt: verifiedAt
+          status: updatedStatus,
+          updatedAt: new Date().toISOString(),
+          payment: {
+            ...ord.payment,
+            status: updatedPaymentStatus,
+            verifiedAt: new Date().toISOString(),
+            verifiedBy: 'Storefront Service',
+            notes: note
+          }
         };
       })
     );
 
     updateDoc(doc(db, 'orders', orderId), {
-      status: newStatus,
-      'payment.status': paymentStatus,
-      'payment.verifiedAt': verifiedAt,
-      'payment.verifiedBy': verifiedBy,
-      'payment.notes': notes,
-      updatedAt: verifiedAt
-    }).catch((err) => {
+      status: updatedStatus,
+      updatedAt: new Date().toISOString(),
+      'payment.status': updatedPaymentStatus,
+      'payment.verifiedAt': new Date().toISOString(),
+      'payment.verifiedBy': 'Storefront Service',
+      'payment.notes': note || null
+    }).catch(err => {
       console.warn('Firestore verifyPayment notice:', err);
     });
   };
 
   const updateOrderStatus = (orderId: string, status: Order['status']) => {
-    const updatedAt = new Date().toISOString();
-    setOrders(prev =>
-      prev.map(ord => (ord.id === orderId ? { ...ord, status, updatedAt } : ord))
-    );
-    updateDoc(doc(db, 'orders', orderId), { status, updatedAt }).catch((err) => {
+    setOrders(prev => prev.map(o => (o.id === orderId ? { ...o, status } : o)));
+    updateDoc(doc(db, 'orders', orderId), { status }).catch(err => {
       console.warn('Firestore updateOrderStatus notice:', err);
     });
   };
 
-  // Theme Management
+  // Theme Switching
   const setActiveTheme = (themeId: ThemePresetId) => {
     setThemes(prev =>
       prev.map(t => ({
@@ -689,8 +538,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         isActive: t.id === themeId
       }))
     );
-    setSettings(prev => ({ ...prev, activeThemeId: themeId }));
-    setDoc(doc(db, 'settings', 'global'), { activeThemeId: themeId }, { merge: true }).catch(() => {});
   };
 
   const updateThemeConfig = (themeId: ThemePresetId, updates: Partial<ThemeConfig>) => {
@@ -699,120 +546,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     );
   };
 
-  // Settings
+  // Site Settings
   const updateSettings = (updates: Partial<SiteSettings>) => {
-    setSettings(prev => ({ ...prev, ...updates }));
-    setDoc(doc(db, 'settings', 'global'), updates, { merge: true }).catch((err) => {
-      console.warn('Firestore updateSettings notice:', err);
+    setSettings(prev => {
+      const merged = { ...prev, ...updates };
+      setDoc(doc(db, 'settings', 'global'), merged).catch((err) => {
+        console.warn('Firestore updateSettings notice:', err);
+      });
+      return merged;
     });
-  };
-
-  // Auth & RBAC
-  const loginWithGoogle = async () => {
-    try {
-      const res = await signInWithPopup(auth, googleProvider);
-      const fbUser = res.user;
-      const userDocRef = doc(db, 'users', fbUser.uid);
-      const userDoc = await getDoc(userDocRef);
-
-      let role: UserRole = 'customer';
-      const userEmail = fbUser.email?.toLowerCase();
-      if (userEmail === 'texmartfashion01@gmail.com' || userEmail === 'texmartf@gmail.com') {
-        role = 'super_admin';
-      } else if (userDoc.exists()) {
-        role = userDoc.data().role || 'customer';
-      }
-
-      const appUser: User = {
-        id: fbUser.uid,
-        email: fbUser.email || 'customer@texmartfashion.com',
-        name: fbUser.displayName || 'Distinguished Gentleman',
-        avatar: fbUser.photoURL || undefined,
-        role,
-        createdAt: new Date().toISOString()
-      };
-
-      await setDoc(userDocRef, {
-        email: appUser.email,
-        name: appUser.name,
-        role: appUser.role,
-        photoURL: appUser.avatar || null,
-        lastLogin: new Date().toISOString()
-      }, { merge: true });
-
-      setCurrentUser(appUser);
-    } catch (err: any) {
-      console.warn('Firebase Google Sign-In notice:', err);
-      // Graceful fallback if popups are restricted in iframe
-      const fallbackUser: User = {
-        id: `usr_g_${Date.now()}`,
-        email: 'customer.gentleman@gmail.com',
-        name: 'Farhan Chowdhury',
-        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=80',
-        role: 'customer',
-        createdAt: new Date().toISOString()
-      };
-      setCurrentUser(fallbackUser);
-    }
-  };
-
-  const loginAdmin = (email: string, pass: string) => {
-    const cleanEmail = email.trim().toLowerCase();
-    if (
-      cleanEmail === 'texmartfashion01@gmail.com' &&
-      (pass === 'Texmartf#' || pass === 'texmartfashion01')
-    ) {
-      const superAdminUser: User = {
-        id: 'usr_super_owner',
-        email: 'texmartfashion01@gmail.com',
-        name: 'Super Admin (Owner)',
-        role: 'super_admin',
-        createdAt: '2026-01-01T00:00:00Z'
-      };
-      setCurrentUser(superAdminUser);
-      setDoc(
-        doc(db, 'users', superAdminUser.id),
-        {
-          email: superAdminUser.email,
-          name: superAdminUser.name,
-          role: 'super_admin',
-          lastLogin: new Date().toISOString()
-        },
-        { merge: true }
-      ).catch(() => {});
-      return { success: true };
-    }
-
-    return {
-      success: false,
-      error: 'Access Denied: Only the authorized Super Admin (texmartfashion01@gmail.com) can access this console.'
-    };
-  };
-
-  const logout = async () => {
-    try {
-      await firebaseSignOut(auth);
-    } catch {
-      // ignore
-    }
-    setCurrentUser(null);
-  };
-
-  const updateUserRole = (userId: string, newRole: UserRole) => {
-    setUsers(prev => prev.map(u => (u.id === userId ? { ...u, role: newRole } : u)));
-    if (currentUser && currentUser.id === userId) {
-      setCurrentUser({ ...currentUser, role: newRole });
-    }
-  };
-
-  const hasPermission = (allowedRoles: UserRole[]): boolean => {
-    if (!currentUser) return false;
-    // Strictly restrict admin access to texmartfashion01@gmail.com
-    if (currentUser.email?.toLowerCase() !== 'texmartfashion01@gmail.com') {
-      return false;
-    }
-    if (currentUser.role === 'super_admin') return true;
-    return allowedRoles.includes(currentUser.role);
   };
 
   const featuredProducts = products.filter(p => p.isFeatured);
@@ -855,15 +597,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updateThemeConfig,
         settings,
         updateSettings,
-        currentUser,
-        users,
-        loginWithGoogle,
-        loginAdmin,
-        logout,
-        updateUserRole,
-        hasPermission,
-        currentView,
-        setCurrentView,
         selectedProductId,
         setSelectedProductId
       }}

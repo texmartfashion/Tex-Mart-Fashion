@@ -12,11 +12,9 @@ import { ProductModal } from './components/storefront/ProductModal';
 import { CartDrawer } from './components/storefront/CartDrawer';
 import { CheckoutModal } from './components/storefront/CheckoutModal';
 import { OrderLookup } from './components/storefront/OrderLookup';
-import { GoogleAuthModal } from './components/storefront/GoogleAuthModal';
 import { SearchModal } from './components/storefront/SearchModal';
 import { WishlistDrawer } from './components/storefront/WishlistDrawer';
 import { OrderStatusTracker } from './components/storefront/OrderStatusTracker';
-import { AdminPortal } from './components/admin/AdminPortal';
 import { Product, ThemePresetId, Order } from './types';
 import {
   Sparkles,
@@ -42,12 +40,9 @@ const StorefrontView: React.FC = () => {
     themes,
     setActiveTheme,
     settings,
-    currentView,
-    setCurrentView,
     wishlist,
     wishlistCount,
-    setIsWishlistOpen,
-    currentUser
+    setIsWishlistOpen
   } = useStore();
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -55,7 +50,6 @@ const StorefrontView: React.FC = () => {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isLookupOpen, setIsLookupOpen] = useState(false);
   const [trackingOrderId, setTrackingOrderId] = useState<string>('');
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   // Filter products by category or favorites
@@ -69,7 +63,6 @@ const StorefrontView: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-[#0c0d0e] text-[#f4f4f5] selection:bg-[#d4af37] selection:text-black">
       {/* Top Bar with 3-Zone Contract */}
       <TopBar
-        onOpenAuth={() => setIsAuthOpen(true)}
         onOpenLookup={() => setIsLookupOpen(true)}
         onOpenSearch={() => setIsSearchOpen(true)}
       />
@@ -182,7 +175,7 @@ const StorefrontView: React.FC = () => {
             <p className="text-sm text-neutral-300 font-light leading-relaxed mb-6">
               At TEX-MART FASHION, each silhouette is developed through rigorous pattern making,
               utilizing hand-selected raw mulberry silks, Super 140s Italian virgin wool, and double-twisted Egyptian Giza 88 cottons.
-              Our artisans spend up to 48 hours executing antique gold zari needlework across the collars of our signature festive Panjabis.
+              Our artisans spend up to 48 hours executing antique gold zari needlework across the collars of our signature bespoke Panjabis.
             </p>
 
             <div className="grid grid-cols-2 gap-6 pt-4 border-t border-white/10 text-xs">
@@ -342,11 +335,6 @@ const StorefrontView: React.FC = () => {
         defaultOrderId={trackingOrderId}
       />
 
-      <GoogleAuthModal
-        isOpen={isAuthOpen}
-        onClose={() => setIsAuthOpen(false)}
-      />
-
       <SearchModal
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
@@ -359,25 +347,7 @@ const StorefrontView: React.FC = () => {
 export default function App() {
   return (
     <StoreProvider>
-      <MainAppRouter />
+      <StorefrontView />
     </StoreProvider>
   );
 }
-
-const MainAppRouter: React.FC = () => {
-  const { currentView, currentUser } = useStore();
-
-  // ONLY the authenticated Super Admin (texmartfashion01@gmail.com) can ever view the admin portal
-  const isAuthorizedSuperAdmin =
-    Boolean(currentUser) &&
-    currentUser?.email?.toLowerCase() === 'texmartfashion01@gmail.com' &&
-    currentUser?.role === 'super_admin';
-
-  if (currentView === 'admin' && isAuthorizedSuperAdmin) {
-    return <AdminPortal />;
-  }
-
-  // All normal users (whether signed in as customer or not signed in at all)
-  // will only ever see the storefront. No admin portal or admin login is visible to them.
-  return <StorefrontView />;
-};

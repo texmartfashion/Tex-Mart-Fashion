@@ -1,20 +1,36 @@
 import { Product, ProductCategory, ThemeConfig, SiteSettings, Order, User } from '../types';
 
 export const INITIAL_CATEGORIES: ProductCategory[] = [
-  { id: 'cat_1', name: 'Royal Panjabi', slug: 'royal-panjabi', description: 'Handcrafted luxury festive Panjabis with antique gold embroidery', itemCount: 6 },
+  { id: 'cat_1', name: 'Royal Panjabi', slug: 'royal-panjabi', description: 'Handcrafted luxury bespoke Panjabis with antique gold embroidery', itemCount: 6 },
   { id: 'cat_2', name: 'Suits & Blazers', slug: 'suits-blazers', description: 'Bespoke Italian wool tailored jackets and midnight tuxedos', itemCount: 4 },
   { id: 'cat_3', name: 'Luxury Polos', slug: 'luxury-polos', description: 'Egyptian cotton and fine-gauge Supima knit polos', itemCount: 4 },
   { id: 'cat_4', name: 'Formal Shirts', slug: 'formal-shirts', description: 'Giza 88 luxury double-twisted cotton shirts with French cuffs', itemCount: 5 },
-  { id: 'cat_5', name: 'Velvet Waistcoats', slug: 'waistcoats', description: 'Hand-embroidered festive vests and Nehru jackets', itemCount: 3 },
+  { id: 'cat_5', name: 'Velvet Waistcoats', slug: 'waistcoats', description: 'Hand-embroidered evening vests and tailored Nehru jackets', itemCount: 3 },
   { id: 'cat_6', name: 'Handcrafted Footwear', slug: 'footwear', description: 'Blake-stitched Italian calfskin Oxfords and Loafers', itemCount: 3 },
   { id: 'cat_7', name: 'Haute Fragrance', slug: 'fragrance', description: 'Extrait de Parfum featuring rich amber, oud and black saffron', itemCount: 2 },
 ];
 
 export const INITIAL_THEMES: ThemeConfig[] = [
   {
+    id: 'regular',
+    name: 'Atelier Signature (Regular)',
+    isActive: true,
+    primaryBg: '#0a0a0c',
+    surfaceColor: '#131317',
+    goldAccent: '#d4af37',
+    goldAccentLight: '#f6e7b0',
+    bannerTitle: 'HAUTE MENSWEAR ESSENTIALS',
+    bannerSubtitle: 'Timeless silhouettes, impeccable atelier tailoring, and modern masculine refinement.',
+    bannerBadge: 'Signature Atelier Collection',
+    bannerImage: '/src/assets/images/hero_mens_luxury_fashion_1790494910412.jpg',
+    announcementText: 'TEX-MART FASHION: Nationwide delivery with bKash verification · Dhaka 80 BDT · Outside 150 BDT',
+    fontHeading: "'Cinzel', serif",
+    themeDescription: 'Understated luxury black & gold minimalist design for daily premium menswear.'
+  },
+  {
     id: 'eid_ul_fitr',
     name: 'Eid-ul-Fitr Royal Couture',
-    isActive: true,
+    isActive: false,
     primaryBg: '#090a0c',
     surfaceColor: '#121418',
     goldAccent: '#d4af37',
@@ -90,22 +106,6 @@ export const INITIAL_THEMES: ThemeConfig[] = [
     announcementText: '👑 CEREMONIAL SUITE: Hand-beaded waistcoats and bespoke groom attire available for reservation.',
     fontHeading: "'Cinzel', serif",
     themeDescription: 'Ultra-luxurious high-contrast gold leaf styling with dramatic focal points.'
-  },
-  {
-    id: 'regular',
-    name: 'Atelier Minimalist (Standard)',
-    isActive: false,
-    primaryBg: '#0a0a0c',
-    surfaceColor: '#131317',
-    goldAccent: '#cfad4d',
-    goldAccentLight: '#eedb97',
-    bannerTitle: 'HAUTE MENSWEAR ESSENTIALS',
-    bannerSubtitle: 'Timeless silhouettes, impeccable tailoring, and modern masculine refinement.',
-    bannerBadge: 'Signature Line',
-    bannerImage: '/src/assets/images/hero_mens_luxury_fashion_1790494910412.jpg',
-    announcementText: 'TEX-MART FASHION: Nationwide delivery with bKash verification · Dhaka 80 BDT · Outside 150 BDT',
-    fontHeading: "'Cinzel', serif",
-    themeDescription: 'Understated luxury black & gold minimalist design for daily premium menswear.'
   }
 ];
 
@@ -134,7 +134,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     isFeatured: true,
     isNewArrival: true,
     stockTotal: 57,
-    tag: 'Eid Special',
+    tag: 'Signature',
     createdAt: '2026-03-15T10:00:00Z'
   },
   {
@@ -411,7 +411,7 @@ export const INITIAL_SETTINGS: SiteSettings = {
   supportPhone: '+880 1878-928045',
   supportEmail: 'texmartfashion01@gmail.com',
   showroomAddress: 'Level 4, Gulshan Pink City, Dhaka-1212, Bangladesh',
-  activeThemeId: 'eid_ul_fitr'
+  activeThemeId: 'regular'
 };
 
 export const INITIAL_USERS: User[] = [

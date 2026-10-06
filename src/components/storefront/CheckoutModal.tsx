@@ -27,14 +27,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, o
     cartSubtotal,
     settings,
     createOrder,
-    isTrxIdUsed,
-    currentUser
+    isTrxIdUsed
   } = useStore();
 
   // Form State
-  const [fullName, setFullName] = useState(currentUser?.name || '');
-  const [phone, setPhone] = useState(currentUser?.phone || '');
-  const [email, setEmail] = useState(currentUser?.email || '');
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [deliveryZone, setDeliveryZone] = useState<'inside_dhaka' | 'outside_dhaka'>('inside_dhaka');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('Dhaka');

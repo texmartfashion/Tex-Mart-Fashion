@@ -11,7 +11,7 @@ interface OrderLookupProps {
 }
 
 export const OrderLookup: React.FC<OrderLookupProps> = ({ isOpen, onClose, defaultOrderId }) => {
-  const { orders, currentUser } = useStore();
+  const { orders } = useStore();
   const [activeTab, setActiveTab] = useState<'tracker' | 'history'>('tracker');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOrderIdForTracker, setSelectedOrderIdForTracker] = useState<string>(
@@ -19,11 +19,6 @@ export const OrderLookup: React.FC<OrderLookupProps> = ({ isOpen, onClose, defau
   );
 
   if (!isOpen) return null;
-
-  // Filter orders by current user or search query (orderNumber or phone or trxId)
-  const userOrders = currentUser
-    ? orders.filter(o => o.userId === currentUser.id || o.customerEmail === currentUser.email)
-    : [];
 
   const searchResults = orders.filter(o => {
     const q = searchQuery.trim().toLowerCase();
@@ -35,7 +30,7 @@ export const OrderLookup: React.FC<OrderLookupProps> = ({ isOpen, onClose, defau
     );
   });
 
-  const displayOrders = searchQuery.trim() ? searchResults : userOrders.length > 0 ? userOrders : orders;
+  const displayOrders = searchQuery.trim() ? searchResults : orders;
 
   const getStatusBadge = (status: OrderStatus) => {
     switch (status) {
